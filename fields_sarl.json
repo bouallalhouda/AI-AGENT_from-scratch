@@ -1,0 +1,14 @@
+{
+  "core_fields": [
+    {"name": "company_name_choices", "question": "Quels sont les 3 noms proposes pour votre societe ?"},
+    {"name": "activity", "question": "Quelle est l'activite de votre societe ?"},
+    {"name": "associate_name", "question": "Quel est le nom du premier associe ?"},
+    {"name": "associate_phone", "question": "Quel est son numero de telephone ?"},
+    {"name": "manager_name", "question": "Qui sera le gerant de la societe ?"},
+    {"name": "signature_type", "question": "Signature separee ou conjointe ?"}
+  ],
+  "optional_addons": [
+    {"name": "domiciliation", "question": "Souhaitez-vous une domiciliation LegalPlus ou utiliser votre propre adresse ?"},
+    {"name": "comptabilite", "question": "Souhaitez-vous que LegalPlus gere votre comptabilite ?"}
+  ]
+}

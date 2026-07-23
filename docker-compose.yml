@@ -1,0 +1,15 @@
+services:
+  ai-agent:
+    build: .
+    container_name: legalplus-ai
+
+    volumes:
+      - .:/app
+
+    stdin_open: true
+    tty: true
+
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+    network_mode: host

@@ -1,0 +1,11 @@
+{
+  "core_fields": [
+    {"name": "trademark_name", "question": "Quel est le nom de la marque a deposer ?"},
+    {"name": "activity", "question": "Quelle est l'activite associee a cette marque ?"},
+    {"name": "associate_name", "question": "Quel est le nom du proprietaire de la marque ?"},
+    {"name": "associate_phone", "question": "Quel est son numero de telephone ?"}
+  ],
+  "optional_addons": [
+    {"name": "logo_upload", "question": "Souhaitez-vous deposer un logo en meme temps que le nom ?"}
+  ]
+}

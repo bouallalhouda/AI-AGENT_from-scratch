@@ -1,0 +1,211 @@
+[
+  {
+    "company_names": null,
+    "activity": "Intelligence Artificielle",
+    "associate_name": "jhouda",
+    "associate_phone": "0787686768",
+    "manager_name": "HOUDA",
+    "signature_type": "Conjointe",
+    "domiciliation": false,
+    "comptabilite": false
+  },
+  {
+    "company_names": null,
+    "activity": "Technologie",
+    "associate_name": "Pers",
+    "associate_phone": "0623456578",
+    "manager_name": "ME",
+    "signature_type": "Séparée",
+    "domiciliation": false,
+    "comptabilite": false,
+    "draft_id": "20260710_150209",
+    "created_at": "2026-07-10T15:02:09.777784"
+  },
+  {
+    "company_names": [
+      "Huda",
+      "Ygv",
+      "Huytech"
+    ],
+    "activity": "Services de Cloud",
+    "associate_name": "Le declarant lui-meme",
+    "associate_phone": "0765676876",
+    "manager_name": "Le declarant lui-meme",
+    "signature_type": "Conjointe",
+    "domiciliation": true,
+    "comptabilite": false,
+    "draft_id": "20260710_151350",
+    "created_at": "2026-07-10T15:13:50.977623"
+  },
+  {
+    "company_names": [
+      "Houda",
+      "Huda",
+      "Techyu"
+    ],
+    "activity": "Transport",
+    "associate_name": "Le declarant lui-meme",
+    "associate_phone": "0678987899",
+    "manager_name": "Le frère du declarant",
+    "signature_type": "Conjointe",
+    "domiciliation": null,
+    "comptabilite": false,
+    "draft_id": "20260710_153243",
+    "created_at": "2026-07-10T15:32:43.765439"
+  },
+  {
+    "company_names": [
+      "Houda",
+      "ServIT",
+      "Uservv"
+    ],
+    "activity": "Serviyou",
+    "associate_name": "Le declarant lui-meme",
+    "associate_phone": "0787657449",
+    "manager_name": "Un membre de la famille du declarant",
+    "signature_type": "Conjointe",
+    "domiciliation": false,
+    "comptabilite": false,
+    "draft_id": "20260710_160001",
+    "created_at": "2026-07-10T16:00:01.259513"
+  },
+  {
+    "company_name_choices": [
+      "Transports De Marchandises",
+      "Nulle",
+      "Atf"
+    ],
+    "activity": "Transport",
+    "associate_name": null,
+    "associate_name_is_declarant": true,
+    "associate_phone": "0675857370",
+    "manager_name": null,
+    "manager_name_is_declarant": true,
+    "signature_type": "separate",
+    "domiciliation": false,
+    "comptabilite": false,
+    "draft_id": "20260713_210328",
+    "created_at": "2026-07-13T21:03:28.215980"
+  },
+  {
+    "company_name_choices": [
+      "Houda",
+      "Datayu",
+      "Idirect"
+    ],
+    "activity": "Données",
+    "associate_name": null,
+    "associate_name_is_declarant": true,
+    "associate_phone": "0637876539",
+    "manager_name": "Houda",
+    "signature_type": "separate",
+    "domiciliation": false,
+    "comptabilite": true,
+    "draft_id": "20260713_214300",
+    "created_at": "2026-07-13T21:43:00.030288"
+  },
+  {
+    "company_name_choices": [
+      "Ithoudai",
+      "Dataame",
+      "DAtiihuuda"
+    ],
+    "activity": "Données et Intelligence Artificielle",
+    "associate_name": null,
+    "associate_name_is_declarant": true,
+    "associate_phone": "0687463920",
+    "manager_name": null,
+    "manager_name_is_declarant": true,
+    "signature_type": "joint",
+    "domiciliation": false,
+    "draft_id": "20260713_221209",
+    "created_at": "2026-07-13T22:12:09.238596"
+  },
+  {
+    "trademark_name": "HudaserviIT",
+    "activity": "Solutions Informatiques de Données",
+    "associate_name": null,
+    "associate_name_is_declarant": true,
+    "associate_phone": "0687958940",
+    "logo_upload": true,
+    "draft_id": "20260713_222601",
+    "workflow": "trademark",
+    "created_at": "2026-07-13T22:26:01.726615"
+  },
+  {
+    "trademark_name": "Domiandes des Sacs à Dos",
+    "activity": "Fabrication de Sacs",
+    "associate_name": null,
+    "associate_name_is_declarant": true,
+    "associate_phone": "0678598579",
+    "logo_upload": false,
+    "draft_id": "20260713_234431",
+    "workflow": "trademark",
+    "created_at": "2026-07-13T23:44:31.490425"
+  },
+  {
+    "company_name_choices": "[\"Luca\",\"Lara\",\"Aria\"]",
+    "activity": "makeup",
+    "associate_name": "Ouissal",
+    "associate_phone": "0786576898",
+    "manager_name": "Ouissal Elfilali",
+    "signature_type": "joint",
+    "domiciliation": "LegalPlus",
+    "comptabilite": "oui",
+    "draft_id": "20260717_144925",
+    "workflow": "sarl",
+    "created_at": "2026-07-17T14:49:25.441662"
+  },
+  {
+    "company_name_choices": [
+      "capital pro",
+      "prime"
+    ],
+    "activity": "vente de vêtements à Casablanca",
+    "associate_name": "ismail ista",
+    "manager_name": "ismail ista, ahmed ista",
+    "associate_phone": "non",
+    "domiciliation": "LegalPlus",
+    "comptabilite": "non",
+    "signature_type": "joint",
+    "draft_id": "20260717_153510",
+    "workflow": "sarl",
+    "created_at": "2026-07-17T15:35:10.134537"
+  },
+  {
+    "email": "houda@gmail.com",
+    "manager_name": "Houda Bouallal",
+    "activity": "Data",
+    "associate_name": "oussama",
+    "associate_phone": "0787989890",
+    "signature_type": "joint",
+    "company_name_choices": [
+      "houddaa",
+      "dtaa",
+      "Dia"
+    ],
+    "domiciliation": "non",
+    "comptabilite": "non",
+    "draft_id": "20260722_124338",
+    "workflow": "sarl",
+    "created_at": "2026-07-22T12:43:38.488672"
+  },
+  {
+    "email": "houda@gmail.com",
+    "activity": "services data",
+    "associate_name": "Houda Bouallal",
+    "associate_phone": "0787989890",
+    "manager_name": "Houda Bouallal",
+    "signature_type": "separate",
+    "company_name_choices": [
+      "hpuuda",
+      "ITyu",
+      "uoi"
+    ],
+    "domiciliation": "utiliser votre propre adresse",
+    "comptabilite": "oui",
+    "draft_id": "20260722_164204",
+    "workflow": "sarl",
+    "created_at": "2026-07-22T16:42:04.929528"
+  }
+]
