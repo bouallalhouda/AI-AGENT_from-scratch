@@ -11,6 +11,7 @@ from tools import (
     set_signature_type,
     add_company_names,
     signature_type_applicable,
+    apply_signature_rule,
 )
 from tool_schemas import tools
 import workflow_service
@@ -49,7 +50,16 @@ STATUS (what's saved vs still needed)
 {status}
 
 SPECIAL RULES
-- signature_type only applies if manager_name and associate_name are different people — if it's not listed above, don't ask about it.
+CRITICAL RULE
+
+If manager_name and associate_name refer to the same person:
+
+- NEVER ask about signature_type.
+- NEVER call set_signature_type().
+- Consider signature_type automatically equal to "separate".
+- Continue immediately to the next question.
+
+Only use set_signature_type() when manager_name and associate_name are different people. — if it's not listed above, don't ask about it.
 - Exactly 3 distinct company names are required.
 - Never invent or guess a phone number — only use digits the user actually typed.
 - Filler words/acknowledgments ("oki", "ok", "d'accord", "oui", "non", "cool"...) are NOT company names, activities, or people's names — don't save them as such. Only save them as-is for addon questions (domiciliation, comptabilite) where "oui"/"non" IS a real answer.
@@ -61,23 +71,66 @@ TOOLS
 - add_company_names(names) — one or more proposed company names, called again each time more are given.
 
 HOW TO BEHAVE
-- The moment the user gives a usable value, call the matching tool immediately in that same turn — see the examples above. Don't announce it, don't ask for confirmation first, just call it and then reply based on the result.
-- Ask about ONE missing field at a time, and always the FIRST one listed under "STILL MISSING (required)" in STATUS above — never skip ahead to a later field while an earlier one is still missing, even if the user's message seems to invite a different topic.
-- If the user refuses a required field, briefly explain it's needed and ask again — don't drop it. Only optional addons can genuinely be skipped with "non".
-- If the user says "moi"/"c'est moi" for a name, ask for their real nom et prénom instead — don't save "moi".
-- If the user expresses uncertainty ("je ne sais pas", "je sais pas", "aucune idée", "i don't know") for a required field, don't just repeat the same question — briefly reassure them and offer 2-3 concrete examples relevant to that field to help them decide, then ask again.
-- Only claim something is saved if STATUS above actually shows it under DONE.
-- Only declare the workflow finished if STATUS shows no STILL MISSING fields and all addons answered.
-- Respond in the same language the user used, defaulting to French.
-- Keep replies short and natural — no raw data or field names shown to the user."""
 
+- The moment the user gives a usable value, call the matching tool immediately in that same turn. Never wait until a later turn.
 
+- CRITICAL:
+When the user answers an addon question (domiciliation or comptabilite),
+you MUST immediately call:  update_field(field_name, value)
+
+-even if the answer is only:
+- oui
+- non
+- LegalPlus
+- ma propre adresse
+- mon propre adresse
+
+Never answer first and save later.
+
+- Ask about ONE missing field at a time, always the FIRST field listed under
+STILL MISSING (required). Never skip ahead.
+
+- If the user refuses a required field, briefly explain why it is needed and ask again.
+
+- If the user says "moi", "c'est moi", or "it's me" while collecting
+associate_name or manager_name:
+
+    • if the real name is not known yet, ask for the real full name.
+
+    • if associate_name is already known, then:
+        manager_name = associate_name
+
+    Immediately call:
+
+        update_field("manager_name", associate_name)
+
+    • If manager_name becomes equal to associate_name,
+    DO NOT ask about signature_type.
+    DO NOT call set_signature_type().
+    Consider signature_type automatically equal to "separate"
+    and continue directly to the next question.
+
+- If the user expresses uncertainty ("je ne sais pas", "i don't know", etc.)
+for a required field, reassure them, give 2-3 examples, then ask again.
+
+- Never claim a value has been saved unless the corresponding tool succeeded.
+
+- Never ask about or explain a field that is NOT listed under
+STILL MISSING (required) or OPTIONAL - NOT YET ASKED.
+
+- Only declare the workflow finished when there are no required fields left
+and every addon has been answered.
+
+- Respond in the same language as the user (default French).
+
+- Keep replies short and natural.
+
+"""
 FILLER_WORDS = {
     "oki", "ok", "okay", "d'accord", "daccord", "oui", "non", "yes", "no",
     "sure", "peut-etre", "peut être", "hmm", "euh", "bon", "voila", "voilà",
     "merci", "cool", "ouais", "yep", "nope",
 }
-
 
 def _is_plausible_name(value, max_words=6):
     """
@@ -91,6 +144,15 @@ def _is_plausible_name(value, max_words=6):
     if not v or "?" in v:
         return False
     if v.lower() in FILLER_WORDS:
+        return False
+
+    if v.lower() in {
+        "et",
+        "and",
+        "ou",
+        "or",
+        "&",
+    }:
         return False
     if len(v.split()) > max_words:
         return False
@@ -118,6 +180,10 @@ def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data,
 
     for tool_call in tool_calls:
         args = json.loads(tool_call.function.arguments)
+        print(
+    "[TOOL]",
+    tool_call.function.name,
+    args)
         result = None
 
         if tool_call.function.name == "validate_moroccan_phone":
@@ -151,6 +217,12 @@ def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data,
                 else:
                     all_known_fields = core_fields + (optional_addons or [])
                     success = update_field(field_name, new_value, all_known_fields, collected_data)
+                    print(
+    "UPDATE RESULT:",
+    success,
+    field_name,
+    new_value
+)
                     if success:
                         workflow_service.save_field(conversation_id, field_name, collected_data[field_name])
                     result = "updated" if success else "rejected: unknown field name"
@@ -159,6 +231,8 @@ def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data,
                 success = update_field(field_name, new_value, all_known_fields, collected_data)
                 if success:
                     workflow_service.save_field(conversation_id, field_name, collected_data[field_name])
+                    if field_name in NAME_FIELDS and apply_signature_rule(collected_data):
+                        workflow_service.save_field(conversation_id, "signature_type", collected_data["signature_type"])
                 result = "updated" if success else "rejected: this field cannot be set via update_field (use its dedicated tool) or it's unknown"
 
         elif tool_call.function.name == "set_signature_type":
@@ -220,6 +294,14 @@ FALSE_COMPLETION_SIGNALS = [
     "tout est en ordre", "processus est terminé", "processus est termine",
     "toutes les informations nécessaires sont", "toutes les informations necessaires sont",
     "votre demande a été enregistrée", "votre demande a ete enregistree", "félicitations", "felicitations",
+    "tout est complet",
+    "tout est terminé",
+    "tout est termine",
+    "votre dossier est complet",
+    "la création est terminée",
+    "la creation est terminee",
+    "bonne chance avec votre société",
+    "bonne chance avec votre societe"
 ]
 
 
@@ -278,6 +360,25 @@ def run_agent_turn(conversation_id, core_fields, conversation_history, user_mess
     in-memory view, never the record of truth itself.
     """
     collected_data = workflow_service.get_current_state(conversation_id)
+    # Safety net: if both names are already known, automatically apply
+    # the signature rule every turn.
+    if (
+        collected_data.get("associate_name")
+        and collected_data.get("manager_name")
+    ):
+        changed = apply_signature_rule(collected_data)
+
+        if changed:
+            workflow_service.save_field(
+                    conversation_id,
+                    "signature_type",
+                    collected_data["signature_type"],
+            )
+    # Backstop for conversations started before this rule existed, or any
+    # other path that set manager_name/associate_name without going through
+    # apply_signature_rule -- idempotent, so safe to call every turn.
+    if apply_signature_rule(collected_data):
+        workflow_service.save_field(conversation_id, "signature_type", collected_data["signature_type"])
 
     status = get_workflow_status(core_fields, collected_data, optional_addons)
     system_prompt = build_system_prompt(status)
@@ -308,9 +409,15 @@ def run_agent_turn(conversation_id, core_fields, conversation_history, user_mess
     # being right — see comments on both functions above for why.
     false_completion = check_reply_false_completion(reply, still_missing)
 
-    reply_is_a_question = "?" in (reply or "")
+    # mismatch runs on every reply now, not just "non-question" ones --
+    # gating on "?" in reply used to skip almost every real narration bug,
+    # since a false claim is nearly always followed by the next question
+    # in the same reply (e.g. "manager_name is saved. What about X?").
+    # The audit prompt already has explicit few-shot examples telling it
+    # to distinguish a bare question from a claim-then-question, so it
+    # doesn't need the reply to be question-free to judge correctly.
     mismatch = False
-    if not reply_is_a_question and not false_completion:
+    if not false_completion:
         mismatch = check_reply_matches_saved_data(user_message, reply, collected_data)
 
     if mismatch or false_completion:

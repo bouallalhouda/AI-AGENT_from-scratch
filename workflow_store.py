@@ -23,8 +23,8 @@ def create_workflow_state(conversation_id, workflow):
             cur.execute(
                 """
                 INSERT INTO workflow_state
-                (conversation_id, workflow, json_data, last_step, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, now(), now())
+                (conversation_id, workflow_name, json_data, last_step, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, 'active', now(), now())
                 ON CONFLICT (conversation_id)
                 DO NOTHING;
                 """,
@@ -123,21 +123,22 @@ def set_last_step(conversation_id, step):
     finally:
         conn.close()
 
-def find_open_workflow_by_email(email):
+def find_active_workflow_for_user(user_id, workflow=None):
     """
-    Returns the latest unfinished workflow for this email.
+    Returns the latest ACTIVE workflow_state for this user (matched via
+    conversations.user_id -- the only identifying column that actually
+    exists on `conversations`). Optionally filtered to one workflow type,
+    since a user can have an active SARL creation and an active trademark
+    request at the same time (doc's point 8/9).
     """
-
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
-
-            cur.execute(
-                """
+            query = """
                 SELECT
                     ws.conversation_id,
-                    ws.workflow,
+                    ws.workflow_name,
                     ws.json_data,
                     ws.last_step
                 FROM workflow_state ws
@@ -145,12 +146,17 @@ def find_open_workflow_by_email(email):
                     ON ws.conversation_id = c.id
                 WHERE
                     c.user_id = %s
-                ORDER BY ws.updated_at DESC
-                LIMIT 1;
-                """,
-                (email,),
-            )
+                    AND ws.status = 'active'
+            """
+            params = [user_id]
 
+            if workflow is not None:
+                query += " AND ws.workflow_name = %s"
+                params.append(workflow)
+
+            query += " ORDER BY ws.updated_at DESC LIMIT 1;"
+
+            cur.execute(query, params)
             row = cur.fetchone()
 
             if row is None:
@@ -163,5 +169,22 @@ def find_open_workflow_by_email(email):
                 "last_step": row[3],
             }
 
+    finally:
+        conn.close()
+
+
+def mark_workflow_completed(conversation_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE workflow_state
+                SET status='completed', ended_at=now(), updated_at=now()
+                WHERE conversation_id=%s;
+                """,
+                (conversation_id,),
+            )
+        conn.commit()
     finally:
         conn.close()

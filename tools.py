@@ -96,3 +96,24 @@ def signature_type_applicable(collected_data):
     if not manager or not associate:
         return True  # not enough info yet, assume it's needed for now
     return manager.strip().lower() != associate.strip().lower()
+
+
+def apply_signature_rule(collected_data):
+    """
+    If manager and associate are the same person,
+    automatically use separate signature.
+    Returns True only if something changed.
+    """
+
+    associate = (collected_data.get("associate_name") or "").strip().lower()
+    manager = (collected_data.get("manager_name") or "").strip().lower()
+
+    if not associate or not manager:
+        return False
+
+    if associate == manager:
+        if collected_data.get("signature_type") != "separate":
+            collected_data["signature_type"] = "separate"
+            return True
+
+    return False
