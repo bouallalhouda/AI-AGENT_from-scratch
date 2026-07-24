@@ -224,5 +224,23 @@
     "draft_id": "20260723_141233",
     "workflow": "sarl",
     "created_at": "2026-07-23T14:12:33.182524"
+  },
+  {
+    "email": "houda122@gmail.com",
+    "company_name_choices": [
+      "ESI",
+      "datai",
+      "urdati"
+    ],
+    "activity": "informatique",
+    "associate_name": "houda bouallal",
+    "associate_phone": "0614343245",
+    "manager_name": "houda bouallal",
+    "signature_type": "separate",
+    "domiciliation": "mon propre adresse",
+    "comptabilite": "non",
+    "draft_id": "20260724_100451",
+    "workflow": "sarl",
+    "created_at": "2026-07-24T10:04:51.772682"
   }
 ]

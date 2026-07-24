@@ -13,8 +13,11 @@ from tools import (
     signature_type_applicable,
 )
 from tool_schemas import tools
-from conversation_store import start_conversation, save_message
-
+import workflow_service
+from agent.memory import (
+    missing_required_fields,
+    get_workflow_status,
+)
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -29,104 +32,13 @@ def _digits_only(s):
     return re.sub(r"\D", "", s or "")
 
 
-def missing_required_fields(core_fields, collected_data):
-    """Single source of truth for what's genuinely still missing."""
-    missing = []
-    for field in core_fields:
-        name = field["name"]
-
-        if name == "company_name_choices":
-            names = collected_data.get(name, [])
-            if not (isinstance(names, list) and len(names) >= 3):
-                missing.append(name)
-
-        elif name == "signature_type":
-            if signature_type_applicable(collected_data) and not collected_data.get(name):
-                missing.append(name)
-
-        elif not collected_data.get(name):
-            missing.append(name)
-
-    return missing
-
-
-def get_workflow_status(core_fields, collected_data, optional_addons=None):
-    """
-    Returns a short text summary of which fields are done vs still missing,
-    so the LLM knows exactly where things stand.
-    """
-    done = []
-    missing = []
-
-    for field in core_fields:
-        name = field["name"]
-        question = field["question"]
-
-        if name == "company_name_choices":
-            names = collected_data.get(name, [])
-            if isinstance(names, list) and len(names) >= 3:
-                done.append(f"- {name}: {names}")
-            else:
-                count = len(names) if isinstance(names, list) else 0
-                missing.append(f"- {name}: {question} (still need {3 - count} more name(s), have: {names if names else 'none'})")
-
-        elif name == "signature_type":
-            if not signature_type_applicable(collected_data):
-                continue
-            if collected_data.get(name):
-                done.append(f"- {name}: {collected_data[name]}")
-            else:
-                missing.append(f"- {name}: {question}")
-
-        elif collected_data.get(name):
-            done.append(f"- {name}: {collected_data[name]}")
-        else:
-            missing.append(f"- {name}: {question}")
-
-    addons_done = []
-    addons_pending = []
-
-    if optional_addons:
-        for addon in optional_addons:
-            name = addon["name"]
-            question = addon["question"]
-            if collected_data.get(name):
-                addons_done.append(f"- {name}: {collected_data[name]}")
-            else:
-                addons_pending.append(f"- {name}: {question}")
-
-    status = ""
-    status += ("DONE (required):\n" + "\n".join(done) + "\n\n") if done else "DONE (required): (nothing yet)\n\n"
-    status += ("STILL MISSING (required):\n" + "\n".join(missing) + "\n\n") if missing else "STILL MISSING (required): (nothing, all required fields complete)\n\n"
-    if addons_done:
-        status += "OPTIONAL - ANSWERED:\n" + "\n".join(addons_done) + "\n\n"
-    if addons_pending:
-        status += "OPTIONAL - NOT YET ASKED (user may decline any of these anytime):\n" + "\n".join(addons_pending) + "\n\n"
-
-    return status
 
 
 # A few concrete examples of the desired behavior, injected into every
 # conversation. Few-shot examples are a more reliable lever for tool-calling
 # consistency than another paragraph of "NEVER do X" — the model imitates
 # the pattern shown instead of trying to satisfy a pile of negative rules.
-FEW_SHOT_EXAMPLES = [
-    {"role": "user", "content": "capital pro and prime"},
-    {"role": "assistant", "content": None, "tool_calls": [{
-        "id": "example1", "type": "function",
-        "function": {"name": "add_company_names", "arguments": '{"names": ["capital pro", "prime"]}'}
-    }]},
-    {"role": "tool", "tool_call_id": "example1", "content": "{'count': 2, 'complete': False, 'names_so_far': ['capital pro', 'prime']}"},
-    {"role": "assistant", "content": "Merci ! Il me faut encore un nom pour compléter les trois."},
-
-    {"role": "user", "content": "0612345678"},
-    {"role": "assistant", "content": None, "tool_calls": [{
-        "id": "example2", "type": "function",
-        "function": {"name": "validate_moroccan_phone", "arguments": '{"phone_number": "0612345678"}'}
-    }]},
-    {"role": "tool", "tool_call_id": "example2", "content": "0612345678"},
-    {"role": "assistant", "content": "Merci, votre numéro est enregistré. Qui sera le gérant de la société ?"},
-]
+FEW_SHOT_EXAMPLES = []
 
 
 def build_system_prompt(status):
@@ -194,7 +106,7 @@ def _is_plausible_activity(value, max_words=12):
     return True
 
 
-def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data, user_message):
+def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data, user_message, conversation_id):
     """
     The model chooses which tool to call and when — full flexibility.
     These checks only validate WHAT it sends, they never block it from
@@ -217,6 +129,7 @@ def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data,
                 validated = validate_moroccan_phone(claimed)
                 if validated:
                     collected_data["associate_phone"] = validated
+                    workflow_service.save_field(conversation_id, "associate_phone", validated)
                     result = validated
                 else:
                     result = "rejected: invalid Moroccan phone number format"
@@ -238,14 +151,20 @@ def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data,
                 else:
                     all_known_fields = core_fields + (optional_addons or [])
                     success = update_field(field_name, new_value, all_known_fields, collected_data)
+                    if success:
+                        workflow_service.save_field(conversation_id, field_name, collected_data[field_name])
                     result = "updated" if success else "rejected: unknown field name"
             else:
                 all_known_fields = core_fields + (optional_addons or [])
                 success = update_field(field_name, new_value, all_known_fields, collected_data)
+                if success:
+                    workflow_service.save_field(conversation_id, field_name, collected_data[field_name])
                 result = "updated" if success else "rejected: this field cannot be set via update_field (use its dedicated tool) or it's unknown"
 
         elif tool_call.function.name == "set_signature_type":
             success = set_signature_type(args["value"], collected_data)
+            if success:
+                workflow_service.save_field(conversation_id, "signature_type", collected_data["signature_type"])
             result = "updated" if success else "rejected: invalid value"
 
         elif tool_call.function.name == "add_company_names":
@@ -254,6 +173,7 @@ def execute_tool_calls(tool_calls, core_fields, optional_addons, collected_data,
             rejected = [n for n in candidates if n not in plausible]
             if plausible:
                 result = add_company_names(plausible, collected_data)
+                workflow_service.save_field(conversation_id, "company_name_choices", collected_data["company_name_choices"])
                 if rejected:
                     result["rejected_as_implausible"] = rejected
             else:
@@ -336,7 +256,7 @@ def build_fallback_reply(core_fields, collected_data, optional_addons=None):
     return "Merci, toutes les informations nécessaires sont bien enregistrées. Un conseiller LegalPlus vous contactera bientôt."
 
 
-def run_agent_turn(core_fields, collected_data, conversation_history, user_message, optional_addons=None):
+def run_agent_turn(conversation_id, core_fields, conversation_history, user_message, optional_addons=None):
     """
     Fully LLM-driven: the model decides which tool (if any) to call, every
     turn, with tool_choice="auto" — no field is pre-extracted or
@@ -350,19 +270,29 @@ def run_agent_turn(core_fields, collected_data, conversation_history, user_messa
     (narrating an unsaved save, or falsely claiming completion), we
     discard it and use a deterministic, ground-truth fallback question —
     safe, honest, never forces a bad write.
+
+    collected_data is loaded fresh from Postgres at the top of every turn
+    (Postgres is the source of truth, not the Python process) and any
+    successful tool call inside execute_tool_calls writes straight back
+    to Postgres as it happens — collected_data here is just this turn's
+    in-memory view, never the record of truth itself.
     """
+    collected_data = workflow_service.get_current_state(conversation_id)
+
     status = get_workflow_status(core_fields, collected_data, optional_addons)
     system_prompt = build_system_prompt(status)
-    messages = [{"role": "system", "content": system_prompt}] + FEW_SHOT_EXAMPLES + conversation_history + [
-        {"role": "user", "content": user_message}
-    ]
+    messages = (
+    [{"role": "system", "content": system_prompt}]
+    + conversation_history
+    + [{"role": "user", "content": user_message}]
+)
 
     response = client.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools, tool_choice="auto")
     message = response.choices[0].message
     tools_used = []
 
     if message.tool_calls:
-        tool_responses = execute_tool_calls(message.tool_calls, core_fields, optional_addons, collected_data, user_message)
+        tool_responses = execute_tool_calls(message.tool_calls, core_fields, optional_addons, collected_data, user_message, conversation_id)
         for tc, tr in zip(message.tool_calls, tool_responses):
             tools_used.append({"tool": tc.function.name, "arguments": json.loads(tc.function.arguments), "result": tr["content"]})
         second_response = client.chat.completions.create(model="gpt-4o-mini", messages=messages + [message] + tool_responses)
@@ -388,10 +318,19 @@ def run_agent_turn(core_fields, collected_data, conversation_history, user_messa
         print(f"[debug — fallback triggered ({reason}); discarded reply: {reply!r}]")
         reply = build_fallback_reply(core_fields, collected_data, optional_addons)
 
+    # Track where the workflow currently stands so a resumed session knows
+    # exactly what to ask next — the next required field, or else the next
+    # unanswered addon, or None once truly nothing is left.
+    next_missing = still_missing[0] if still_missing else None
+    if next_missing is None and optional_addons:
+        next_pending_addon = next((a["name"] for a in optional_addons if not collected_data.get(a["name"])), None)
+        next_missing = next_pending_addon
+    workflow_service.record_last_step(conversation_id, next_missing)
+
     conversation_history.append({"role": "user", "content": user_message})
     conversation_history.append({"role": "assistant", "content": reply})
 
-    return reply, tools_used
+    return reply, tools_used, collected_data
 
 
 if __name__ == "__main__":
@@ -403,38 +342,39 @@ if __name__ == "__main__":
     core_fields = config["core_fields"]
     optional_addons = config["optional_addons"]
 
-    collected_data = {}
     conversation_history = []
 
-    conversation_id = start_conversation(user_id="test_user_1", title="Création SARL")
+    workflow_name = config_filename.replace("fields_", "").replace(".json", "")
 
-    print("=" * 50)
-    print("👋 Bienvenue chez LegalPlus AI")
-    print("=" * 50)
-
-    print("\nAI: Avant de commencer, quel est votre email ?")
     email = None
     while email is None:
-        user_input = input("You: ").strip()
-        email = validate_email(user_input)
+        raw_email = input("Email: ").strip()
+        email = validate_email(raw_email)
         if email is None:
-            print("AI: Cet email ne semble pas valide. Pouvez-vous le vérifier et le redonner ?")
+            print("This doesn't look like a valid email — please try again.")
 
-    collected_data["email"] = email
-    save_message(conversation_id, "user", user_input)
-    save_message(conversation_id, "assistant", "Email enregistré.", meta={"tools_used": [{"tool": "validate_email", "result": email}]})
-    print(f"AI: Merci ! Email enregistré : {email}\n")
+    conversation_id, initial_state, last_step, is_resumed = workflow_service.resume_or_create_workflow(
+        user_id=email, workflow=workflow_name, title=config_filename
+    )
+
+    if is_resumed:
+        all_known_fields = core_fields + optional_addons
+        step_field = next((f for f in all_known_fields if f["name"] == last_step), None)
+        if step_field:
+            print(f"AI: Welcome back! We were creating your {workflow_name}. {step_field['question']}")
+        else:
+            print(f"AI: Welcome back! We were creating your {workflow_name}. Let's continue where we left off.")
 
     all_addon_names = [a["name"] for a in optional_addons]
 
     while True:
         user_message = input("You: ")
-        reply, tools_used = run_agent_turn(core_fields, collected_data, conversation_history, user_message, optional_addons)
+        reply, tools_used, collected_data = run_agent_turn(conversation_id, core_fields, conversation_history, user_message, optional_addons)
         print(f"AI: {reply}")
         print(f"[state: {collected_data}]")
 
-        save_message(conversation_id, "user", user_message)
-        save_message(conversation_id, "assistant", reply, meta={"tools_used": tools_used} if tools_used else None)
+        workflow_service.log_message(conversation_id, "user", user_message)
+        workflow_service.log_message(conversation_id, "assistant", reply, meta={"tools_used": tools_used} if tools_used else None)
 
         addons_covered = all(name in collected_data for name in all_addon_names)
         still_missing = missing_required_fields(core_fields, collected_data)
@@ -451,9 +391,11 @@ if __name__ == "__main__":
 
             draft_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             collected_data["draft_id"] = draft_id
-            collected_data["workflow"] = config_filename.replace("fields_", "").replace(".json", "")
+            collected_data["workflow"] = workflow_name
             collected_data["created_at"] = datetime.datetime.now().isoformat()
 
+            # draft_output.json kept only as a debugging export now —
+            # workflow_state in Postgres is the actual record.
             all_drafts = []
             if os.path.exists("draft_output.json"):
                 try:
@@ -470,6 +412,8 @@ if __name__ == "__main__":
 
             with open("draft_output.json", "w", encoding="utf-8") as f:
                 json.dump(all_drafts, f, indent=2, ensure_ascii=False)
+
+            workflow_service.mark_completed(conversation_id)
 
             print(f"\n✅ Votre demande a été enregistrée (draft_id: {draft_id}).")
             print(f"Total de demandes enregistrées jusqu'à présent: {len(all_drafts)}")

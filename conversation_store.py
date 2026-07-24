@@ -3,7 +3,7 @@ import uuid
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-
+from workflow_store import create_workflow_state
 load_dotenv()
 
 
@@ -16,10 +16,10 @@ def get_connection():
         password=os.getenv("KB_DB_PASSWORD"),
     )
 
-
 def start_conversation(user_id, title):
     """
-    Creates a new row in `conversations`. Returns the new conversation_id (uuid).
+    Creates a new conversation and its workflow_state.
+    Returns the conversation_id.
     """
     conversation_id = str(uuid.uuid4())
 
@@ -28,17 +28,25 @@ def start_conversation(user_id, title):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO conversations (id, user_id, title, created_at, updated_at, last_message_at)
+                INSERT INTO conversations
+                (id, user_id, title, created_at, updated_at, last_message_at)
                 VALUES (%s, %s, %s, now(), now(), now());
                 """,
                 (conversation_id, user_id, title),
             )
+
         conn.commit()
+
     finally:
         conn.close()
 
-    return conversation_id
+    # Create the workflow memory for this conversation
+    create_workflow_state(
+        conversation_id=conversation_id,
+        workflow_name="SARL"
+    )
 
+    return conversation_id
 
 def save_message(conversation_id, role, content, parent_id=None, meta=None):
     """
@@ -66,3 +74,45 @@ def save_message(conversation_id, role, content, parent_id=None, meta=None):
         conn.close()
 
     return message_id
+
+def get_or_create_active_conversation(email, workflow):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                SELECT id
+                FROM conversations
+                WHERE email=%s
+                AND status='active'
+                ORDER BY created_at DESC
+                LIMIT 1;
+                """,
+                (email,),
+            )
+
+            row = cur.fetchone()
+
+            if row:
+                return row[0]
+
+            cur.execute(
+                """
+                INSERT INTO conversations
+                (email, workflow, status)
+                VALUES (%s,%s,'active')
+                RETURNING id;
+                """,
+                (email, workflow),
+            )
+
+            conversation_id = cur.fetchone()[0]
+
+        conn.commit()
+
+        return conversation_id
+
+    finally:
+        conn.close()
